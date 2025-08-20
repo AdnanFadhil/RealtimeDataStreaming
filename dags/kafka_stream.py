@@ -37,7 +37,7 @@ def format_data(res):
     
 def stream_data():
     import json
-
+    from kafka import KafkaProducer
     res = get_data()
     res = format_data(res)
     print(json.dumps(res, indent=3))
