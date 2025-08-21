@@ -4,8 +4,9 @@ from airflow.operators.python import PythonOperator
 
 default_args = {
     'owner': 'adnanfadhil',
-    'start_date': datetime(2023,9,3,10,00),
+    'start_date': datetime(2023, 9, 3, 10, 0),
 }
+
 
 def get_data():
     import requests
@@ -13,8 +14,8 @@ def get_data():
     res = requests.get("http://randomuser.me/api/")
     res = res.json()
     res = res['results'][0]
-    # print(res)
     return res
+
 
 def format_data(res):
     data = {}
@@ -22,8 +23,8 @@ def format_data(res):
     data['first_name'] = res['name']['first']
     data['last_name'] = res['name']['last']
     data['gender'] = res['gender']
-    data['address'] = (f"{str(location['street']['number'])}{location['street']['name']}"
-                       f"{location['city']}{location['state']}{location['country']}")
+    data['address'] = (f"No.{str(location['street']['number'])} {location['street']['name']}, "
+                       f"{location['city']}, {location['state']}, {location['country']}")
     data['postcode'] = location['postcode']
     data['email'] = res['email']
     data['username'] = res['login']['username']
@@ -34,13 +35,31 @@ def format_data(res):
     data['picture'] = res['picture']['medium']
 
     return data
-    
+
+
 def stream_data():
     import json
     from kafka import KafkaProducer
-    res = get_data()
-    res = format_data(res)
-    print(json.dumps(res, indent=3))
+    import time
+    import logging
+
+    procedure = KafkaProducer(bootstrap_servers=['broker:29092'], max_block_ms=5000)
+    curr_time = time.time()
+
+    while True:
+        if time.time() > curr_time + 60:
+            break
+        try:
+            res = get_data()
+            res = format_data(res)
+
+            procedure.send('users_created', json.dumps(res).encode('utf-8'))
+            procedure.flush()
+            time.sleep(1)
+
+        except Exception as e:
+            logging.error(f"There's an error: {e}")
+            continue
 
 
 with DAG('user_automation',
@@ -48,10 +67,9 @@ with DAG('user_automation',
          schedule='@daily',
          catchup=False
          ) as dag:
-
     streaming_task = PythonOperator(
         task_id='stream_data_from_api',
         python_callable=stream_data,
     )
 
-stream_data();
+# stream_data()
